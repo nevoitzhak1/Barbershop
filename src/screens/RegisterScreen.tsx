@@ -17,7 +17,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function RegisterScreen() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
-  const [gender, setGender] = useState<"זכר" | "נקבה" | "אחר" | null>(null);
   const [birthDate, setBirthDate] = useState<Date | null>(null);
   const [email, setEmail] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
@@ -32,10 +31,6 @@ export default function RegisterScreen() {
 
     if (!phone.match(/^05\d{8}$/)) {
       newErrors.push("מספר טלפון לא תקין (חייב להיות 10 ספרות ולהתחיל ב־05)");
-    }
-
-    if (!gender) {
-      newErrors.push("יש לבחור מין");
     }
 
     if (!birthDate) {
@@ -95,24 +90,6 @@ export default function RegisterScreen() {
               onChangeText={setPhone}
               value={phone}
             />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>מין:</Text>
-            <View style={styles.genderOptions}>
-              {["זכר", "נקבה", "אחר"].map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[
-                    styles.genderButton,
-                    gender === option && styles.genderButtonSelected,
-                  ]}
-                  onPress={() => setGender(option as any)}
-                >
-                  <Text style={styles.genderText}>{option}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
           </View>
 
           <View style={styles.inputContainer}>

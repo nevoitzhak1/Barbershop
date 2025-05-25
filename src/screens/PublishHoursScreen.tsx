@@ -1,18 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
-  KeyboardAvoidingView,
+  TouchableOpacity,
+  PanResponder,
   Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { db } from "../firebase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { doc, setDoc } from "firebase/firestore";
-import { db } from "../firebase";
 
 const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "מוצ״ש"];
 
@@ -22,7 +22,7 @@ const generateHalfHourSlots = (day: string) => {
   let end = 22;
 
   if (day === "שישי") end = 19;
-  else if (day === "מוצ״ש") start = 18;
+  if (day === "מוצ״ש") start = 18;
 
   for (let hour = start; hour < end; hour++) {
     slots.push(`${hour.toString().padStart(2, "0")}:00`);
@@ -33,42 +33,71 @@ const generateHalfHourSlots = (day: string) => {
 };
 
 export default function PublishHoursScreen() {
-  const navigation = useNavigation();
   const [selected, setSelected] = useState<{ [day: string]: string[] }>({});
+  const [adminUser, setAdminUser] = useState<string>("");
 
-  const toggleSlot = (day: string, hour: string) => {
+  const selectingRef = useRef<boolean>(false);
+  const currentDayRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const fetchAdmin = async () => {
+      const stored = await AsyncStorage.getItem("admin_username");
+      if (stored) setAdminUser(stored);
+    };
+    fetchAdmin();
+  }, []);
+
+  const toggleHour = (day: string, hour: string) => {
     setSelected((prev) => {
-      const daySlots = prev[day] || [];
-      const exists = daySlots.includes(hour);
+      const hours = prev[day] || [];
+      const exists = hours.includes(hour);
       return {
         ...prev,
-        [day]: exists
-          ? daySlots.filter((h) => h !== hour)
-          : [...daySlots, hour],
+        [day]: exists ? hours.filter((h) => h !== hour) : [...hours, hour],
       };
     });
   };
 
   const handlePublish = async () => {
     try {
-      const admin = await AsyncStorage.getItem("logged_admin");
-      if (!admin) {
-        alert("⚠️ לא נמצא שם משתמש מחובר");
-        return;
-      }
-
-      await setDoc(doc(db, "workHours", admin), {
-        hours: selected,
-        timestamp: new Date().toISOString(),
-      });
-
-      console.log("📆 שעות נשמרו בהצלחה");
-      alert("✅ שעות פורסמו בהצלחה");
-    } catch (error) {
-      console.error("❌ שגיאה בשמירת שעות:", error);
-      alert("שגיאה בשמירה ל־Firebase");
+      await setDoc(doc(db, "publishedHours", adminUser), selected);
+      alert("✅ שעות פורסמו בהצלחה!");
+    } catch (e) {
+      console.error("שגיאה בפרסום השעות:", e);
+      alert("שגיאה בפרסום השעות");
     }
   };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        selectingRef.current = true;
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        const { locationX, locationY } = evt.nativeEvent;
+
+        const elements = document.elementsFromPoint?.(
+          locationX,
+          locationY
+        ) as HTMLElement[];
+
+        if (elements) {
+          elements.forEach((el) => {
+            const hour = el?.getAttribute?.("data-hour");
+            const day = el?.getAttribute?.("data-day");
+            if (hour && day && selectingRef.current) {
+              toggleHour(day, hour);
+            }
+          });
+        }
+      },
+      onPanResponderRelease: () => {
+        selectingRef.current = false;
+        currentDayRef.current = null;
+      },
+    })
+  ).current;
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
@@ -87,22 +116,24 @@ export default function PublishHoursScreen() {
               return (
                 <View key={day} style={styles.daySection}>
                   <Text style={styles.dayTitle}>{day}</Text>
-                  <View style={styles.hoursGrid}>
+                  <View style={styles.hoursGrid} {...panResponder.panHandlers}>
                     {hours.map((hour) => {
-                      const selectedForDay = selected[day]?.includes(hour);
+                      const isSelected = selected[day]?.includes(hour);
                       return (
                         <TouchableOpacity
                           key={hour}
+                          onPress={() => toggleHour(day, hour)}
+                          data-hour={hour}
+                          data-day={day}
                           style={[
                             styles.hourBox,
-                            selectedForDay && styles.hourBoxSelected,
+                            isSelected && styles.hourBoxSelected,
                           ]}
-                          onPress={() => toggleSlot(day, hour)}
                         >
                           <Text
                             style={[
                               styles.hourText,
-                              selectedForDay && styles.hourTextSelected,
+                              isSelected && styles.hourTextSelected,
                             ]}
                           >
                             {hour}

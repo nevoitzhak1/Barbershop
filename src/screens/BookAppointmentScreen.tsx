@@ -1,140 +1,177 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
+  ScrollView,
   Alert,
+  TextInput,
+  Platform,
 } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { db } from "../firebase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { addDoc, collection } from "firebase/firestore";
-import { db } from "../firebase"; // ודא שה־firebase מוגדר כראוי
-
-const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "מוצ״ש"];
-
-const generateHalfHourSlots = (day: string) => {
-  const slots: string[] = [];
-  let start = 9;
-  let end = 22;
-
-  if (day === "שישי") {
-    end = 19;
-  } else if (day === "מוצ״ש") {
-    start = 18;
-  }
-
-  for (let hour = start; hour < end; hour++) {
-    slots.push(`${hour.toString().padStart(2, "0")}:00`);
-    slots.push(`${hour.toString().padStart(2, "0")}:30`);
-  }
-  slots.push(`${end}:00`);
-  return slots;
-};
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  arrayRemove,
+  collection,
+  addDoc,
+} from "firebase/firestore";
 
 export default function BookAppointmentScreen() {
-  const navigation = useNavigation();
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [availableHours, setAvailableHours] = useState<string[]>([]);
   const [selectedHour, setSelectedHour] = useState<string | null>(null);
-  const [userName, setUserName] = useState<string>("");
+  const [notes, setNotes] = useState("");
+  const [userId, setUserId] = useState<string>("");
+
+  const daysMap = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "מוצ״ש"];
 
   useEffect(() => {
-    const fetchUserName = async () => {
-      try {
-        const storedName = await AsyncStorage.getItem("user_name");
-        if (storedName) {
-          setUserName(storedName);
-        }
-      } catch (e) {
-        console.log("שגיאה בשליפת שם המשתמש:", e);
-      }
-    };
-
-    fetchUserName();
+    loadUser();
   }, []);
 
-  const handleConfirm = async () => {
-    if (!selectedDay || !selectedHour) {
-      Alert.alert("שגיאה", "אנא בחר יום ושעה.");
+  useEffect(() => {
+    if (userId) {
+      fetchAvailableHours();
+    }
+  }, [selectedDate, userId]);
+
+  const loadUser = async () => {
+    const stored = await AsyncStorage.getItem("user_phone_or_email");
+    if (stored) {
+      setUserId(stored);
+    }
+  };
+
+  const getDayName = (date: Date) => {
+    const day = date.getDay(); // 0 = Sunday
+    return daysMap[day];
+  };
+
+  const fetchAvailableHours = async () => {
+    try {
+      const docRef = doc(db, "publishedHours", "RomArlaki");
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const dayName = getDayName(selectedDate);
+        const hours = data[dayName] || [];
+        setAvailableHours(hours);
+        setSelectedHour(null);
+      } else {
+        setAvailableHours([]);
+      }
+    } catch (error) {
+      console.error("שגיאה בשליפת שעות:", error);
+    }
+  };
+
+  const handleBook = async () => {
+    if (!selectedHour) {
+      Alert.alert("בחר שעה לפני קביעת תור");
       return;
     }
 
+    const dateKey = selectedDate.toISOString().split("T")[0]; // YYYY-MM-DD
+
     try {
-      await addDoc(collection(db, "appointments"), {
-        userName,
-        day: selectedDay,
+      // 1. שמירה בתור האישי
+      await setDoc(doc(db, "appointments", userId), {
+        date: dateKey,
         hour: selectedHour,
-        barber: "Admin", // ניתן לשנות בהתאם
-        timestamp: new Date().toISOString(),
-        status: "ממתין",
+        notes,
       });
 
-      Alert.alert("הצלחה", "התור נקבע בהצלחה!");
-      navigation.goBack();
-    } catch (error) {
-      console.error("שגיאה בשמירת התור:", error);
-      Alert.alert("שגיאה", "אירעה שגיאה בעת קביעת התור.");
+      // 2. הוספה לספר
+      await addDoc(collection(db, "barbers", "RomArlaki", "appointments"), {
+        userId,
+        date: dateKey,
+        hour: selectedHour,
+        notes,
+      });
+
+      // 3. הסרה מהשעות הפנויות
+      const pubRef = doc(db, "publishedHours", "RomArlaki");
+      const dayName = getDayName(selectedDate);
+      await updateDoc(pubRef, {
+        [dayName]: arrayRemove(selectedHour),
+      });
+
+      Alert.alert("✅ התור נקבע בהצלחה");
+    } catch (e) {
+      console.error("שגיאה בקביעת תור:", e);
+      Alert.alert("שגיאה בקביעת תור");
     }
   };
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <View style={styles.container}>
         <Text style={styles.title}>קביעת תור</Text>
 
-        {DAYS.map((day) => {
-          const hours = generateHalfHourSlots(day);
-          return (
-            <View key={day} style={styles.daySection}>
+        <Text style={styles.label}>בחר תאריך:</Text>
+        <DateTimePicker
+          value={selectedDate}
+          mode="date"
+          display={Platform.OS === "ios" ? "inline" : "default"}
+          onChange={(event, date) => {
+            if (date) setSelectedDate(date);
+          }}
+          minimumDate={new Date()}
+        />
+
+        <Text style={[styles.label, { marginTop: 20 }]}>
+          שעות זמינות ליום {getDayName(selectedDate)}:
+        </Text>
+
+        {availableHours.length === 0 ? (
+          <Text style={{ textAlign: "center", marginTop: 20 }}>
+            אין שעות זמינות ליום זה
+          </Text>
+        ) : (
+          <ScrollView contentContainerStyle={styles.hoursContainer}>
+            {availableHours.map((hour) => (
               <TouchableOpacity
-                onPress={() =>
-                  setSelectedDay((prev) => (prev === day ? null : day))
-                }
+                key={hour}
+                style={[
+                  styles.hourBox,
+                  hour === selectedHour && styles.hourBoxSelected,
+                ]}
+                onPress={() => setSelectedHour(hour)}
               >
                 <Text
                   style={[
-                    styles.dayTitle,
-                    selectedDay === day && styles.selectedDayTitle,
+                    styles.hourText,
+                    hour === selectedHour && styles.hourTextSelected,
                   ]}
                 >
-                  {day}
+                  {hour}
                 </Text>
               </TouchableOpacity>
-              {selectedDay === day && (
-                <View style={styles.hoursGrid}>
-                  {hours.map((hour) => (
-                    <TouchableOpacity
-                      key={hour}
-                      style={[
-                        styles.hourBox,
-                        selectedHour === hour && styles.hourBoxSelected,
-                      ]}
-                      onPress={() =>
-                        setSelectedHour((prev) => (prev === hour ? null : hour))
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.hourText,
-                          selectedHour === hour && styles.hourTextSelected,
-                        ]}
-                      >
-                        {hour}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-          );
-        })}
+            ))}
+          </ScrollView>
+        )}
 
-        <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
-          <Text style={styles.confirmButtonText}>אישור תור</Text>
+        <Text style={[styles.label, { marginTop: 20 }]}>הערות לספר:</Text>
+        <TextInput
+          placeholder="לדוגמה: דירוג בצדדים קצר..."
+          value={notes}
+          onChangeText={setNotes}
+          style={styles.notesInput}
+          multiline
+        />
+
+        <TouchableOpacity style={styles.floatingButton} onPress={handleBook}>
+          <Text style={styles.floatingButtonText}>קבע תור</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -142,37 +179,33 @@ export default function BookAppointmentScreen() {
 const styles = StyleSheet.create({
   container: {
     padding: 20,
+    flex: 1,
     direction: "rtl",
     backgroundColor: "#fff",
-    flexGrow: 1,
   },
   title: {
     fontSize: 24,
     textAlign: "center",
     marginBottom: 20,
   },
-  daySection: {
-    marginBottom: 24,
-  },
-  dayTitle: {
-    fontSize: 18,
+  label: {
+    fontSize: 16,
     marginBottom: 8,
+    textAlign: "right",
   },
-  selectedDayTitle: {
-    fontWeight: "bold",
-    color: "#2196F3",
-  },
-  hoursGrid: {
+  hoursContainer: {
     flexDirection: "row",
     flexWrap: "wrap-reverse",
-    gap: 8,
+    gap: 10,
+    marginTop: 10,
+    paddingBottom: 100,
   },
   hourBox: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: "#ccc",
+    borderRadius: 6,
     margin: 4,
   },
   hourBoxSelected: {
@@ -186,14 +219,30 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
   },
-  confirmButton: {
-    marginTop: 30,
-    backgroundColor: "#4CAF50",
-    padding: 14,
-    borderRadius: 10,
-    alignItems: "center",
+  notesInput: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    padding: 12,
+    minHeight: 60,
+    textAlignVertical: "top",
   },
-  confirmButtonText: {
+  floatingButton: {
+    position: "absolute",
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: "#2196F3",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  floatingButtonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",

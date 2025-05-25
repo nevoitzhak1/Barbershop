@@ -3,10 +3,12 @@ import {
   View,
   Text,
   TextInput,
-  Button,
   StyleSheet,
   ScrollView,
   Switch,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -48,7 +50,6 @@ export default function AdminLoginScreen() {
     loadStoredCredentials();
   }, []);
 
-  // בתוך handleLogin – גרסה מלאה עם השינוי:
   const handleLogin = async () => {
     const matched = adminCredentials.find(
       (admin) => admin.username === username && admin.password === password
@@ -56,9 +57,6 @@ export default function AdminLoginScreen() {
 
     if (matched) {
       setError("");
-
-      // 🟢 שמירת שם המנהל שהתחבר
-      await AsyncStorage.setItem("logged_admin", username);
 
       if (rememberMe) {
         await AsyncStorage.setItem("admin_username", username);
@@ -77,37 +75,46 @@ export default function AdminLoginScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>התחברות למנהלים</Text>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={styles.container}>
+            <Text style={styles.title}>התחברות למנהלים</Text>
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>שם משתמש:</Text>
-          <TextInput
-            style={styles.input}
-            value={username}
-            onChangeText={setUsername}
-          />
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>שם משתמש:</Text>
+              <TextInput
+                style={styles.input}
+                value={username}
+                onChangeText={setUsername}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>סיסמה:</Text>
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+            </View>
+
+            <View style={styles.rememberContainer}>
+              <Text style={styles.label}>זכור אותי</Text>
+              <Switch value={rememberMe} onValueChange={setRememberMe} />
+            </View>
+
+            {error !== "" && <Text style={styles.error}>{error}</Text>}
+          </ScrollView>
+
+          <TouchableOpacity style={styles.floatingButton} onPress={handleLogin}>
+            <Text style={styles.floatingButtonText}>התחבר</Text>
+          </TouchableOpacity>
         </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>סיסמה:</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-        </View>
-
-        <View style={styles.rememberContainer}>
-          <Text style={styles.label}>זכור אותי</Text>
-          <Switch value={rememberMe} onValueChange={setRememberMe} />
-        </View>
-
-        {error !== "" && <Text style={styles.error}>{error}</Text>}
-
-        <Button title="התחבר" onPress={handleLogin} />
-      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -118,6 +125,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     direction: "rtl",
+    paddingBottom: 100,
   },
   title: {
     fontSize: 28,
@@ -149,5 +157,25 @@ const styles = StyleSheet.create({
     color: "red",
     textAlign: "right",
     marginBottom: 10,
+  },
+  floatingButton: {
+    position: "absolute",
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: "#2196F3",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  floatingButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
 });
