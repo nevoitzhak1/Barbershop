@@ -1,68 +1,44 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   TextInput,
-  Button,
+  TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Switch,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function LoginScreen() {
   const navigation = useNavigation<NavigationProp>();
-
-  const [identifier, setIdentifier] = useState(""); // טלפון או מייל
-  const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
+  const [input, setInput] = useState("");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    const loadStoredCredentials = async () => {
-      try {
-        const storedIdentifier = await AsyncStorage.getItem("user_identifier");
-        const storedPassword = await AsyncStorage.getItem("user_password");
+  const isEmail = (value: string) => /\S+@\S+\.\S+/.test(value);
+  const isPhone = (value: string) => /^05\d{8}$/.test(value);
 
-        if (storedIdentifier && storedPassword) {
-          setIdentifier(storedIdentifier);
-          setPassword(storedPassword);
-          setRememberMe(true);
-        }
-      } catch (e) {
-        console.log("Failed to load user credentials:", e);
-      }
-    };
-
-    loadStoredCredentials();
-  }, []);
-
-  const handleLogin = async () => {
-    const isValid =
-      (identifier.includes("@") && password.length >= 4) || // מייל
-      (/^\d{9,10}$/.test(identifier) && password.length >= 4); // טלפון
-
-    if (!isValid) {
-      setError("פרטים לא תקינים");
-      return;
-    }
-
-    if (rememberMe) {
-      await AsyncStorage.setItem("user_identifier", identifier);
-      await AsyncStorage.setItem("user_password", password);
+  const handleLogin = () => {
+    if (isPhone(input) || isEmail(input)) {
+      setError("");
+      console.log("🔐 התחברות עם:", input);
+      // כאן תוכל להוסיף שלב אימות אמיתי
+      navigation.navigate("UserHomeScreen");
     } else {
-      await AsyncStorage.removeItem("user_identifier");
-      await AsyncStorage.removeItem("user_password");
+      setError("יש להזין מייל תקין או מספר טלפון חוקי");
     }
+  };
 
-    console.log("✅ התחברות משתמש:", identifier);
-    navigation.navigate("UserHomeScreen"); // ודא שהמסך קיים
+  const goToRegister = () => {
+    navigation.navigate("Register");
+  };
+
+  const goToAdminLogin = () => {
+    navigation.navigate("AdminLogin");
   };
 
   return (
@@ -71,41 +47,33 @@ export default function LoginScreen() {
         <Text style={styles.title}>התחברות</Text>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>טלפון / מייל:</Text>
+          <Text style={styles.label}>מספר טלפון או מייל:</Text>
           <TextInput
             style={styles.input}
-            value={identifier}
-            onChangeText={setIdentifier}
-            keyboardType="email-address"
+            value={input}
+            onChangeText={setInput}
+            keyboardType="default"
             autoCapitalize="none"
+            placeholder="הכנס מייל או טלפון"
           />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>סיסמה:</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-        </View>
-
-        <View style={styles.rememberContainer}>
-          <Text style={styles.label}>זכור אותי</Text>
-          <Switch value={rememberMe} onValueChange={setRememberMe} />
         </View>
 
         {error !== "" && <Text style={styles.error}>{error}</Text>}
 
-        <Button title="התחבר" onPress={handleLogin} />
+        <TouchableOpacity style={styles.outlinedButton} onPress={handleLogin}>
+          <Text style={styles.outlinedButtonText}>התחבר</Text>
+        </TouchableOpacity>
 
-        <View style={{ marginTop: 20 }}>
-          <Button
-            title="עדיין אין לך חשבון? הירשם"
-            onPress={() => navigation.navigate("Register")}
-          />
-        </View>
+        <TouchableOpacity
+          style={[styles.outlinedButton, { marginTop: 10 }]}
+          onPress={goToAdminLogin}
+        >
+          <Text style={styles.outlinedButtonText}>התחבר כמנהל</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={goToRegister}>
+          <Text style={styles.linkText}>אין לך חשבון? הרשם כאן</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -138,15 +106,27 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#fff",
   },
-  rememberContainer: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 15,
-  },
   error: {
     color: "red",
     textAlign: "right",
     marginBottom: 10,
+  },
+  outlinedButton: {
+    borderWidth: 1.5,
+    borderColor: "#2196F3",
+    padding: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  outlinedButtonText: {
+    color: "#2196F3",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  linkText: {
+    marginTop: 20,
+    color: "#2196F3",
+    textAlign: "center",
+    textDecorationLine: "underline",
   },
 });
