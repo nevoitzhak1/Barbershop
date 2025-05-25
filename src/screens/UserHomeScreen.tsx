@@ -4,41 +4,34 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Button,
   TouchableOpacity,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../navigation/types"; // ודא שזה קיים
+import { RootStackParamList } from "../navigation/types";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-export default function BarberHomeScreen() {
+export default function UserHomeScreen() {
   const navigation = useNavigation<NavigationProp>();
 
-  const upcomingAppointments = [
-    { id: "1", name: "דני כהן", time: "10:30", date: "2025-05-26" },
-    { id: "2", name: "נועה לוי", time: "12:00", date: "2025-05-26" },
-  ];
+  // בהמשך נחליף את זה בנתונים אמיתיים מ־Firebase
+  const upcomingAppointments: { id: string; date: string; time: string }[] = [];
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>מסך ספר</Text>
+      <Text style={styles.title}>ברוך הבא</Text>
 
-      <Text style={styles.sectionTitle}>📅 תורים קרובים:</Text>
+      <Text style={styles.sectionTitle}>📅 תורים עתידיים:</Text>
       {upcomingAppointments.length === 0 ? (
-        <Text style={styles.noAppointments}>אין תורים קרובים</Text>
+        <Text style={styles.noAppointments}>אין תורים עתידיים</Text>
       ) : (
         upcomingAppointments.map((appt) => (
           <View key={appt.id} style={styles.appointment}>
-            <Text>{appt.name}</Text>
             <Text>
               {appt.date} בשעה {appt.time}
             </Text>
-            <View style={styles.appointmentButtons}>
-              <Button title="שנה" onPress={() => {}} />
-              <Button title="בטל" onPress={() => {}} color="#d9534f" />
-            </View>
+            {/* כאן נוסיף אפשרות לבטל/לשנות */}
           </View>
         ))
       )}
@@ -46,17 +39,9 @@ export default function BarberHomeScreen() {
       <View style={styles.actions}>
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => navigation.navigate("PublishHours")}
+          onPress={() => navigation.navigate("BookAppointment")}
         >
-          <Text style={styles.actionText}>פרסם שעות</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionText}>צפה בנתונים</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionText}>רשימת הזמנות</Text>
+          <Text style={styles.actionText}>קביעת תור</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -68,6 +53,7 @@ const styles = StyleSheet.create({
     padding: 20,
     direction: "rtl",
     backgroundColor: "#fff",
+    flexGrow: 1,
   },
   title: {
     fontSize: 28,
@@ -90,11 +76,6 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10,
     backgroundColor: "#f9f9f9",
-  },
-  appointmentButtons: {
-    flexDirection: "row-reverse",
-    justifyContent: "space-between",
-    marginTop: 10,
   },
   actions: {
     marginTop: 30,
